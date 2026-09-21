@@ -7,7 +7,9 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-dotenv.config();
+for (const envFile of [".env.local", ".env"]) {
+  dotenv.config({ path: envFile });
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,10 +17,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDirectory = join(__dirname, "dist");
 const frontendEntry = join(distDirectory, "index.html");
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
-const clerkConfigured = Boolean(process.env.CLERK_SECRET_KEY);
+const clerkSecretKey = process.env.CLERK_SECRET_KEY;
+const clerkPublishableKey = process.env.CLERK_PUBLISHABLE_KEY;
+const clerkConfigured = Boolean(clerkSecretKey && clerkPublishableKey && !clerkSecretKey.includes("your_") && !clerkPublishableKey.includes("your_"));
 
-if (clerkConfigured) app.use(clerkMiddleware());
-else console.warn("Clerk is not configured. Protected authentication routes are unavailable.");
+if (clerkConfigured) app.use(clerkMiddleware({ publishableKey: clerkPublishableKey }));
+else console.warn("Clerk is not fully configured. Set CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY to enable protected authentication routes.");
 
 function buildFallbackReport({ state, city, input }) {
   const normalizedState = state || "your state";
