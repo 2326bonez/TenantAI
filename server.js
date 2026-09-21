@@ -2,11 +2,17 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import OpenAI from "openai";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const distDirectory = join(__dirname, "dist");
+const frontendEntry = join(distDirectory, "index.html");
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
 function buildFallbackReport({ state, city, input }) {
@@ -51,7 +57,6 @@ function normalizeReport(report, fallback) {
   const severity = ["low", "medium", "high", "critical"].includes(report?.severity)
     ? report.severity
     : fallback.severity;
-
   const issues = Array.isArray(report?.issues) && report.issues.length
     ? report.issues.map((issue) => ({
         title: issue?.title || "Housing issue",
@@ -59,18 +64,13 @@ function normalizeReport(report, fallback) {
         riskLevel: issue?.riskLevel || "Medium",
       }))
     : fallback.issues;
-
-  const steps = Array.isArray(report?.steps) && report.steps.length
-    ? report.steps
-    : fallback.steps;
-
+  const steps = Array.isArray(report?.steps) && report.steps.length ? report.steps : fallback.steps;
   const communication = report?.communication && typeof report.communication === "object"
     ? {
         template: report.communication.template || fallback.communication.template,
         tone: report.communication.tone || fallback.communication.tone,
       }
     : fallback.communication;
-
   const resources = Array.isArray(report?.resources) && report.resources.length
     ? report.resources.map((resource) => ({
         name: resource?.name || "Resource",
@@ -79,29 +79,18 @@ function normalizeReport(report, fallback) {
       }))
     : fallback.resources;
 
-  return {
-    severity,
-    issues,
-    steps,
-    communication,
-    resources,
-  };
+  return { severity, issues, steps, communication, resources };
 }
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Health check
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-// API Routes
 app.get("/api/states", (_req, res) => {
-  res.json({
-    states: ["CA", "NY", "TX", "FL", "IL", "WA", "GA", "AZ", "CO", "NC"],
-  });
+  res.json({ states: ["CA", "NY", "TX", "FL", "IL", "WA", "GA", "AZ", "CO", "NC"] });
 });
 
 app.post("/api/analyze", async (req, res) => {
@@ -122,27 +111,20 @@ app.post("/api/analyze", async (req, res) => {
   }
 
   try {
-    const prompt = `You are a legal and housing-rights assistant helping renters in ${state}, USA understand their situation and next steps.\n\nThe user is in ${city || "their city"}, ${state}.\nTheir description:\n"${input}"\n\nReturn valid JSON only with this exact shape:\n{\n  "severity": "low|medium|high|critical",\n  "issues": [{\n    "title": "string",\n    "description": "string",\n    "riskLevel": "Low|Medium|High|Critical"\n  }],\n  "steps": ["string"],\n  "communication": {\n    "template": "string",\n    "tone": "professional|assertive|formal"\n  },\n  "resources": [{\n    "name": "string",\n    "url": "https://...",\n    "description": "string"\n  }]\n}\n\nProvide practical analysis, likely issues, a clear action plan, a communication template, and state-specific resource suggestions. Keep the tone professional and concise.`;
+    const prompt = `You are a legal and housing-rights assistant helping renters in ${state}, USA understand their situation and next steps.\n\nThe user is in ${city || "their city"}, ${state}.\nTheir description:\n"${input}"\n\nReturn valid JSON only with this exact shape:\n{\n  "severity": "low|medium|high|critical",\n  "issues": [{ "title": "string", "description": "string", "riskLevel": "Low|Medium|High|Critical" }],\n  "steps": ["string"],\n  "communication": { "template": "string", "tone": "professional|assertive|formal" },\n  "resources": [{ "name": "string", "url": "https://...", "description": "string" }]\n}\n\nProvide practical analysis, likely issues, a clear action plan, a communication template, and state-specific resource suggestions. Keep the tone professional and concise.`;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       temperature: 0.3,
       response_format: { type: "json_object" },
       messages: [
-        {
-          role: "system",
-          content: "You help renters understand legal and housing issues and return a structured JSON report.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
+        { role: "system", content: "You help renters understand legal and housing issues and return a structured JSON report." },
+        { role: "user", content: prompt },
       ],
     });
 
     const rawResponse = completion.choices?.[0]?.message?.content || "{}";
     let parsedResponse;
-
     try {
       parsedResponse = JSON.parse(rawResponse);
     } catch {
@@ -153,13 +135,9 @@ app.post("/api/analyze", async (req, res) => {
       ? normalizeReport(parsedResponse, fallback)
       : fallback;
 
-    return res.json({
-      ...report,
-      received: { state, city, input, email },
-    });
+    return res.json({ ...report, received: { state, city, input, email } });
   } catch (error) {
     console.error("OpenAI analysis error:", error);
-
     return res.status(500).json({
       ...fallback,
       error: "Unable to analyze this situation right now.",
@@ -168,7 +146,19 @@ app.post("/api/analyze", async (req, res) => {
   }
 });
 
-// Start server
+// Serve only the compiled frontend in deployments where `pnpm build` has run.
+// This is intentionally after all API routes so frontend fallback cannot intercept them.
+if (existsSync(frontendEntry)) {
+  app.use(express.static(distDirectory));
+
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api/") || req.path === "/health") {
+      return next();
+    }
+    return res.sendFile(frontendEntry);
+  });
+}
+
 app.listen(PORT, () => {
   console.log(`🚀 Landlord AI server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
