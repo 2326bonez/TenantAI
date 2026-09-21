@@ -91,7 +91,6 @@ function normalizeReport(report, fallback) {
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static("public"));
 
 // Health check
 app.get("/health", (_req, res) => {
