@@ -17,25 +17,14 @@ const frontendEntry = join(distDirectory, "index.html");
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 const clerkConfigured = Boolean(process.env.CLERK_SECRET_KEY);
 
-if (clerkConfigured) {
-  app.use(clerkMiddleware());
-} else {
-  console.warn("Clerk is not configured. Protected authentication routes are unavailable.");
-}
+if (clerkConfigured) app.use(clerkMiddleware());
+else console.warn("Clerk is not configured. Protected authentication routes are unavailable.");
 
 function buildFallbackReport({ state, city, input }) {
   const normalizedState = state || "your state";
   const normalizedCity = city || "your city";
-
-  return {
-    severity: "medium",
-    issues: [{ title: "Housing concern requiring review", description: `Based on the information provided for ${normalizedCity}, ${normalizedState}, your situation may require documentation, follow-up, and a careful review of your tenant rights.`, riskLevel: "Medium" }],
-    steps: ["Document all communications, dates, and any evidence related to the issue.", "Collect photos, videos, receipts, and messages that support your situation.", "Draft a clear written request or notice to your landlord or property manager.", "Research the tenant protections that apply in your state and city."],
-    communication: { template: `Dear [Landlord Name],\n\nI am writing to raise a concern regarding my rental unit in ${normalizedCity}, ${normalizedState}.\n\n${input}\n\nI request that this matter be addressed promptly.\n\nSincerely,\n[Your Name]`, tone: "professional" },
-    resources: [{ name: "Tenant Union", url: "https://www.tenantunion.org/", description: "Resources and guidance for renters dealing with housing disputes." }, { name: "LawHelp", url: "https://www.lawhelp.org/", description: "Find local legal aid and tenant-rights assistance in your area." }],
-  };
+  return { severity: "medium", issues: [{ title: "Housing concern requiring review", description: `Based on the information provided for ${normalizedCity}, ${normalizedState}, your situation may require documentation, follow-up, and a careful review of your tenant rights.`, riskLevel: "Medium" }], steps: ["Document all communications, dates, and any evidence related to the issue.", "Collect photos, videos, receipts, and messages that support your situation.", "Draft a clear written request or notice to your landlord or property manager.", "Research the tenant protections that apply in your state and city."], communication: { template: `Dear [Landlord Name],\n\nI am writing to raise a concern regarding my rental unit in ${normalizedCity}, ${normalizedState}.\n\n${input}\n\nI request that this matter be addressed promptly.\n\nSincerely,\n[Your Name]`, tone: "professional" }, resources: [{ name: "Tenant Union", url: "https://www.tenantunion.org/", description: "Resources and guidance for renters dealing with housing disputes." }, { name: "LawHelp", url: "https://www.lawhelp.org/", description: "Find local legal aid and tenant-rights assistance in your area." }] };
 }
-
 function normalizeReport(report, fallback) {
   const severity = ["low", "medium", "high", "critical"].includes(report?.severity) ? report.severity : fallback.severity;
   const issues = Array.isArray(report?.issues) && report.issues.length ? report.issues.map((issue) => ({ title: issue?.title || "Housing issue", description: issue?.description || "No issue details were provided.", riskLevel: issue?.riskLevel || "Medium" })) : fallback.issues;
@@ -47,17 +36,14 @@ function normalizeReport(report, fallback) {
 
 app.use(cors());
 app.use(express.json());
-
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
 app.get("/api/states", (_req, res) => res.json({ states: ["CA", "NY", "TX", "FL", "IL", "WA", "GA", "AZ", "CO", "NC"] }));
-
 app.get("/api/me", (req, res) => {
   if (!clerkConfigured) return res.status(503).json({ error: "Clerk authentication is not configured." });
   const { isAuthenticated, userId } = getAuth(req);
   if (!isAuthenticated || !userId) return res.status(401).json({ error: "Authentication required." });
   return res.json({ userId });
 });
-
 app.post("/api/analyze", async (req, res) => {
   const { state, city, input, email } = req.body;
   if (!state || !input) return res.status(400).json({ error: "state and input are required" });
@@ -75,7 +61,6 @@ app.post("/api/analyze", async (req, res) => {
     return res.status(500).json({ ...fallback, error: "Unable to analyze this situation right now.", received: { state, city, input, email } });
   }
 });
-
 if (existsSync(frontendEntry)) {
   app.use(express.static(distDirectory));
   app.get("*", (req, res, next) => {
@@ -83,7 +68,6 @@ if (existsSync(frontendEntry)) {
     return res.sendFile(frontendEntry);
   });
 }
-
 app.listen(PORT, () => {
   console.log(`🚀 TenantAI server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
