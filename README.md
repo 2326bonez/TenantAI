@@ -1,53 +1,32 @@
-# Landlord AI
+# TenantAI
 
-LandlordAI is an AI-powered web app that helps renters understand housing issues, generate next steps, and create ready-to-send communication based on their situation and state.
+TenantAI is a tenant-focused housing assistance workspace. It helps renters describe housing concerns, organize facts, review AI-generated possibilities and next steps, and prepare professional communications for a landlord or property manager.
 
-## Features
+## Current state
 
-- 🤖 AI-powered analysis of housing situations
-- 📋 Step-by-step guidance for tenants
-- 💬 Ready-to-send communication templates
-- 🌍 State-specific tenant rights information
-- 🔒 Secure authentication with Clerk
-- 💳 Flexible pricing plans
+- React + Vite application shell with Dashboard, Analyze, My Cases, Documents, Messages, Resources, and Profile areas.
+- Existing Express endpoints preserved: `/health`, `/api/states`, and `/api/analyze`.
+- OpenAI-backed structured analysis remains server-side, with the existing fallback when `OPENAI_API_KEY` is unavailable.
+- Cases, documents, messages, and profiles are intentionally unconnected. The UI does not simulate browser-local persistence or fake uploads, accounts, payments, or sending.
 
-## Tech Stack
+## Integrations and configuration
 
-- **Frontend:** React + Vite
-- **Backend:** Express.js + Node.js
-- **AI:** OpenAI GPT API
-- **Authentication:** Clerk
-- **Package Manager:** pnpm
+The repository currently has no wired authentication, database, private document storage, or Stripe integration. `@clerk/express` is present as an unused dependency, but Clerk requires both server and browser configuration before accounts and protected routes can be enabled. See `.env.example` for the required variables.
 
-## Getting Started
+## Run locally
 
-### Prerequisites
+Requirements: Node.js 20+ and pnpm.
 
-- Node.js 20+
-- pnpm
-- OpenAI API key
-- Clerk API keys
+```bash
+pnpm install
+pnpm dev
+```
 
-### Installation
+For a production build served by Express:
 
-1. Clone the repository
-2. Install dependencies: `pnpm install`
-3. Set up environment variables (see `.env.example`)
-4. Start development server: `pnpm dev`
-5. Start Express server: `npm start`
+```bash
+pnpm build
+npm start
+```
 
-## Environment Variables
-
-See `.env.example` and `.env.local` for required environment variables.
-
-## Deployment
-
-This project is configured for Replit deployment:
-
-1. Import from GitHub on Replit
-2. Add required secrets in Replit settings
-3. Click "Run" to start
-
-## License
-
-ISC
+TenantAI provides general informational assistance, not legal advice or guaranteed legal conclusions.
